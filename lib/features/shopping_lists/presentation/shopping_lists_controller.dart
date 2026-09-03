@@ -61,9 +61,7 @@ final shoppingListsControllerProvider =
     });
 
 final deleteShoppingListControllerProvider =
-    Provider.autoDispose<DeleteShoppingListController>(
-      DeleteShoppingListController.new,
-    );
+    Provider<DeleteShoppingListController>(DeleteShoppingListController.new);
 
 class DeleteShoppingListController {
   const DeleteShoppingListController(this._ref);
