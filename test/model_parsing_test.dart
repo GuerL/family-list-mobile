@@ -1,5 +1,6 @@
 import 'package:familylist/features/authentication/data/auth_models.dart';
 import 'package:familylist/features/families/data/family_models.dart';
+import 'package:familylist/features/shopping_lists/data/shopping_list_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -37,5 +38,31 @@ void main() {
     expect(family.id, 1);
     expect(family.members.single.email, 'owner@example.com');
     expect(family.isActive, isTrue);
+  });
+
+  test('parses current FamilyListDto JSON', () {
+    final list = ShoppingListDto.fromJson({
+      'id': 12,
+      'description': 'Weekend shopping',
+      'family': {
+        'id': 1,
+        'name': 'Default Fam',
+        'description': 'Default Fam',
+        'members': [],
+        'creator': null,
+        'imageUrl': '',
+        'inviteCode': 'abc',
+        'isActive': true,
+      },
+      'listItems': [
+        {'id': 1, 'description': 'Milk', 'quantity': 1, 'purchased': false},
+        {'id': 2, 'description': 'Bread', 'quantity': 1, 'purchased': true},
+      ],
+      'createdAt': '2026-09-03T12:30:00',
+    });
+
+    expect(list.description, 'Weekend shopping');
+    expect(list.itemCount, 2);
+    expect(list.remainingItemCount, 1);
   });
 }

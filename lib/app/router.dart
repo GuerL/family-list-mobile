@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/products/presentation/products_placeholder_screen.dart';
 import '../features/authentication/presentation/auth_controller.dart';
 import '../features/authentication/presentation/login_screen.dart';
 import '../features/families/presentation/families_screen.dart';
+import '../features/shopping/presentation/shopping_placeholder_screen.dart';
+import '../features/shopping_lists/presentation/shopping_lists_screen.dart';
+import 'main_scaffold.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _RouterRefreshNotifier(ref);
@@ -19,9 +23,44 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: LoginScreen.routePath,
         builder: (context, state) => const LoginScreen(),
       ),
-      GoRoute(
-        path: FamiliesScreen.routePath,
-        builder: (context, state) => const FamiliesScreen(),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainScaffold(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: FamiliesScreen.routePath,
+                builder: (context, state) => const FamiliesScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: ShoppingListsScreen.routePath,
+                builder: (context, state) => const ShoppingListsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: ShoppingPlaceholderScreen.routePath,
+                builder: (context, state) => const ShoppingPlaceholderScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: ProductsPlaceholderScreen.routePath,
+                builder: (context, state) => const ProductsPlaceholderScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
     ],
     redirect: (context, state) {
