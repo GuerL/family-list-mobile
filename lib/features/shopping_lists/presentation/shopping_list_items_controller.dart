@@ -26,36 +26,93 @@ class ShoppingListItemsController extends AsyncNotifier<List<ListItemDto>> {
     state = await AsyncValue.guard(() => _loadItems(_familyListId));
   }
 
-  Future<void> togglePurchased(ListItemDto item) async {
+  Future<void> createItem({
+    required int familyId,
+    required String name,
+    required int quantity,
+    String? description,
+  }) async {
+    final previousItems = state.value ?? const <ListItemDto>[];
+
+    try {
+      final api = ref.read(shoppingListsApiProvider);
+      final familyProduct = await api.createFamilyProduct(
+        familyId: familyId,
+        label: name,
+        description: description,
+      );
+      final familyProductId = familyProduct.id;
+      if (familyProductId == null) {
+        throw const ApiError(message: 'Created product has no id.');
+      }
+
+      final created = await api.createItem(
+        familyListId: _familyListId,
+        familyProductId: familyProductId,
+        quantity: quantity,
+        description: description,
+      );
+      state = AsyncData([...previousItems, created]);
+    } catch (error, stackTrace) {
+      final apiError = ApiError.fromObject(error);
+      state = AsyncError(apiError, stackTrace);
+      throw apiError;
+    }
+  }
+
+  Future<void> updateItem({
+    required ListItemDto item,
+    required int quantity,
+    String? description,
+  }) async {
     final itemId = item.id;
     if (itemId == null) {
       return;
     }
 
     final previousItems = state.value ?? const <ListItemDto>[];
-    final nextPurchased = item.purchased != true;
-    state = AsyncData(
-      previousItems
-          .map(
-            (current) => current.id == itemId
-                ? current.copyWithPurchased(nextPurchased)
-                : current,
-          )
-          .toList(),
-    );
 
     try {
       final updated = await ref
           .read(shoppingListsApiProvider)
-          .togglePurchased(itemId: itemId, purchased: nextPurchased);
+          .updateItem(
+            itemId: itemId,
+            quantity: quantity,
+            productId: item.product?.id,
+            familyProductId: item.familyProduct?.id,
+            description: description,
+          );
       state = AsyncData(
-        (state.value ?? previousItems)
+        previousItems
             .map((current) => current.id == itemId ? updated : current)
             .toList(),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
       state = AsyncData(previousItems);
-      throw ApiError.fromObject(error);
+      final apiError = ApiError.fromObject(error);
+      state = AsyncError(apiError, stackTrace);
+      throw apiError;
+    }
+  }
+
+  Future<void> deleteItem(ListItemDto item) async {
+    final itemId = item.id;
+    if (itemId == null) {
+      return;
+    }
+
+    final previousItems = state.value ?? const <ListItemDto>[];
+    state = AsyncData(
+      previousItems.where((current) => current.id != itemId).toList(),
+    );
+
+    try {
+      await ref.read(shoppingListsApiProvider).deleteItem(itemId);
+    } catch (error, stackTrace) {
+      state = AsyncData(previousItems);
+      final apiError = ApiError.fromObject(error);
+      state = AsyncError(apiError, stackTrace);
+      throw apiError;
     }
   }
 

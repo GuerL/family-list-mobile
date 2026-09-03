@@ -54,6 +54,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                       return ShoppingListDetailScreen(
                         listId: listId,
                         listName: list?.description ?? 'List',
+                        familyId: list?.family.id,
                       );
                     },
                   ),

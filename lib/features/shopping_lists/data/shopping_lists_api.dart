@@ -64,16 +64,64 @@ class ShoppingListsApi {
     return items;
   }
 
-  Future<ListItemDto> togglePurchased({
-    required int itemId,
-    required bool purchased,
+  Future<ListItemDto> createItem({
+    required int familyListId,
+    required int familyProductId,
+    required int quantity,
+    String? description,
   }) async {
-    appLogger.debug('List detail: toggling purchased for item $itemId');
-    final response = await _dio.patch<Map<String, dynamic>>(
-      '/api/list-items/$itemId/purchased',
-      data: {'purchased': purchased},
+    appLogger.debug('List detail: creating item for list $familyListId');
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/list-items',
+      data: {
+        'familyListId': familyListId,
+        'productId': null,
+        'familyProductId': familyProductId,
+        'quantity': quantity,
+        'description': description,
+      },
     );
     return ListItemDto.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  Future<ListItemDto> updateItem({
+    required int itemId,
+    required int quantity,
+    int? productId,
+    int? familyProductId,
+    String? description,
+  }) async {
+    appLogger.debug('List detail: updating item $itemId');
+    final response = await _dio.put<Map<String, dynamic>>(
+      '/api/list-items/$itemId',
+      data: {
+        'quantity': quantity,
+        'productId': productId,
+        'familyProductId': familyProductId,
+        'description': description,
+      },
+    );
+    return ListItemDto.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  Future<void> deleteItem(int itemId) async {
+    appLogger.debug('List detail: deleting item $itemId');
+    await _dio.delete<void>('/api/list-items/$itemId');
+  }
+
+  Future<FamilyProductDto> createFamilyProduct({
+    required int familyId,
+    required String label,
+    String? description,
+  }) async {
+    appLogger.debug(
+      'List detail: creating family product for family $familyId',
+    );
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/family-products',
+      data: {'familyId': familyId, 'label': label, 'description': description},
+    );
+    return FamilyProductDto.fromJson(response.data ?? <String, dynamic>{});
   }
 
   List<ShoppingListDto> _parseListResponse(List<dynamic>? data) {

@@ -12,10 +12,12 @@ class ShoppingListDetailScreen extends ConsumerWidget {
     super.key,
     required this.listId,
     required this.listName,
+    this.familyId,
   });
 
   final int listId;
   final String listName;
+  final int? familyId;
 
   static String routePath(int listId) => '/lists/$listId';
 
@@ -33,139 +35,558 @@ class ShoppingListDetailScreen extends ConsumerWidget {
             .read(shoppingListItemsControllerProvider(listId).notifier)
             .reload(),
         data: (items) {
-          if (items.isEmpty) {
-            return const EmptyState(
-              title: 'Empty list',
-              message:
-                  'Items can be added from list management in a later step.',
-            );
-          }
-
           final sortedItems = [...items]
-            ..sort((a, b) {
-              if (a.purchased == b.purchased) {
-                return a.productName.compareTo(b.productName);
-              }
-              return a.purchased == true ? 1 : -1;
-            });
+            ..sort((a, b) => a.productName.compareTo(b.productName));
 
           return RefreshIndicator(
             onRefresh: () => ref
                 .read(shoppingListItemsControllerProvider(listId).notifier)
                 .reload(),
-            child: ListView.separated(
+            child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              itemCount: sortedItems.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final item = sortedItems[index];
-                return _ListItemTile(
-                  item: item,
-                  onToggle: () async {
-                    try {
-                      await ref
-                          .read(
-                            shoppingListItemsControllerProvider(listId)
-                                .notifier,
-                          )
-                          .togglePurchased(item);
-                    } catch (error) {
-                      if (!context.mounted) {
-                        return;
-                      }
-                      final apiError = ApiError.fromObject(error);
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(apiError.message)));
-                    }
-                  },
-                );
-              },
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _ListDetailHeader(
+                    itemCount: sortedItems.length,
+                    onAddItem: () => _showAddItemSheet(context, ref),
+                  ),
+                ),
+                if (sortedItems.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyState(
+                      title: 'Empty list',
+                      message: 'Add items to prepare this list.',
+                      action: FilledButton.icon(
+                        onPressed: () => _showAddItemSheet(context, ref),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add item'),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    sliver: SliverList.separated(
+                      itemCount: sortedItems.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = sortedItems[index];
+                        return _ListItemTile(
+                          item: item,
+                          onEdit: () => _showEditItemSheet(context, ref, item),
+                          onDelete: () =>
+                              _confirmDeleteItem(context, ref, item),
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Add item will be added later.')),
-          );
+    );
+  }
+
+  Future<void> _showAddItemSheet(BuildContext context, WidgetRef ref) async {
+    final currentFamilyId = familyId;
+    if (currentFamilyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('List family is unavailable.')),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AddListItemSheet(
+        onSave: (name, quantity, description) async {
+          await ref
+              .read(shoppingListItemsControllerProvider(listId).notifier)
+              .createItem(
+                familyId: currentFamilyId,
+                name: name,
+                quantity: quantity,
+                description: description,
+              );
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Add item'),
+      ),
+    );
+  }
+
+  Future<void> _showEditItemSheet(
+    BuildContext context,
+    WidgetRef ref,
+    ListItemDto item,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _EditListItemSheet(
+        item: item,
+        onSave: (quantity, description) async {
+          await ref
+              .read(shoppingListItemsControllerProvider(listId).notifier)
+              .updateItem(
+                item: item,
+                quantity: quantity,
+                description: description,
+              );
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteItem(
+    BuildContext context,
+    WidgetRef ref,
+    ListItemDto item,
+  ) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete item?'),
+        content: Text('Remove ${item.productName} from this list?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await ref
+          .read(shoppingListItemsControllerProvider(listId).notifier)
+          .deleteItem(item);
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      final apiError = ApiError.fromObject(error);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(apiError.message)));
+    }
+  }
+}
+
+class _ListDetailHeader extends StatelessWidget {
+  const _ListDetailHeader({required this.itemCount, required this.onAddItem});
+
+  final int itemCount;
+  final VoidCallback onAddItem;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final itemLabel = itemCount == 1 ? '1 item' : '$itemCount items';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              itemLabel,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: onAddItem,
+            icon: const Icon(Icons.add),
+            label: const Text('Add item'),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _ListItemTile extends StatelessWidget {
-  const _ListItemTile({required this.item, required this.onToggle});
+  const _ListItemTile({
+    required this.item,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final ListItemDto item;
-  final VoidCallback onToggle;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isPurchased = item.purchased == true;
     final quantity = item.quantity ?? 1;
+    final subtitle = item.managementSubtitle;
 
     return Card(
-      color: isPurchased ? theme.colorScheme.surfaceContainerHighest : null,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onToggle,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            children: [
-              Checkbox(value: isPurchased, onChanged: (_) => onToggle()),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        decoration: isPurchased
-                            ? TextDecoration.lineThrough
-                            : TextDecoration.none,
-                        color: isPurchased
-                            ? theme.colorScheme.onSurfaceVariant
-                            : null,
-                      ),
-                    ),
-                    if (item.description != null &&
-                        item.description!.isNotEmpty &&
-                        item.description != item.productName)
-                      Text(
-                        item.description!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                  ],
-                ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+        title: Text(
+          item.productName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: subtitle == null
+            ? null
+            : Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'x$quantity',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.primary,
               ),
-              const SizedBox(width: 8),
-              Text(
-                'x$quantity',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: isPurchased
-                      ? theme.colorScheme.onSurfaceVariant
-                      : theme.colorScheme.primary,
+            ),
+            PopupMenuButton<_ListItemAction>(
+              tooltip: 'Item actions',
+              onSelected: (action) {
+                switch (action) {
+                  case _ListItemAction.edit:
+                    onEdit();
+                  case _ListItemAction.delete:
+                    onDelete();
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _ListItemAction.edit,
+                  child: ListTile(
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('Edit'),
+                  ),
                 ),
+                PopupMenuItem(
+                  value: _ListItemAction.delete,
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline),
+                    title: Text('Delete'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        onTap: onEdit,
+      ),
+    );
+  }
+}
+
+enum _ListItemAction { edit, delete }
+
+class _AddListItemSheet extends StatefulWidget {
+  const _AddListItemSheet({required this.onSave});
+
+  final Future<void> Function(String name, int quantity, String? description)
+  onSave;
+
+  @override
+  State<_AddListItemSheet> createState() => _AddListItemSheetState();
+}
+
+class _AddListItemSheetState extends State<_AddListItemSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  int _quantity = 1;
+  bool _isSubmitting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 16),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Add item', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _nameController,
+              autofocus: true,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(labelText: 'Product name'),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Product name is required.';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _descriptionController,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'Optional note',
               ),
+              maxLines: 2,
+              onFieldSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 16),
+            _QuantityStepper(
+              quantity: _quantity,
+              isSubmitting: _isSubmitting,
+              onChanged: (value) => setState(() => _quantity = value),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
             ],
-          ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _isSubmitting ? null : _submit,
+              child: _isSubmitting
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Add'),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate() || _isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+
+    final description = _descriptionController.text.trim();
+
+    try {
+      await widget.onSave(
+        _nameController.text.trim(),
+        _quantity,
+        description.isEmpty ? null : description,
+      );
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = ApiError.fromObject(error).message;
+        _isSubmitting = false;
+      });
+    }
+  }
+}
+
+class _EditListItemSheet extends StatefulWidget {
+  const _EditListItemSheet({required this.item, required this.onSave});
+
+  final ListItemDto item;
+  final Future<void> Function(int quantity, String? description) onSave;
+
+  @override
+  State<_EditListItemSheet> createState() => _EditListItemSheetState();
+}
+
+class _EditListItemSheetState extends State<_EditListItemSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _descriptionController;
+  late int _quantity;
+  bool _isSubmitting = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _descriptionController = TextEditingController(
+      text: widget.item.description ?? '',
+    );
+    _quantity = widget.item.quantity ?? 1;
+  }
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 16),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(widget.item.productName, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _descriptionController,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'Optional note',
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
+            _QuantityStepper(
+              quantity: _quantity,
+              isSubmitting: _isSubmitting,
+              onChanged: (value) => setState(() => _quantity = value),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+            ],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _isSubmitting ? null : _submit,
+              child: _isSubmitting
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate() || _isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+
+    final description = _descriptionController.text.trim();
+
+    try {
+      await widget.onSave(_quantity, description.isEmpty ? null : description);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = ApiError.fromObject(error).message;
+        _isSubmitting = false;
+      });
+    }
+  }
+}
+
+class _QuantityStepper extends StatelessWidget {
+  const _QuantityStepper({
+    required this.quantity,
+    required this.isSubmitting,
+    required this.onChanged,
+  });
+
+  final int quantity;
+  final bool isSubmitting;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      children: [
+        Expanded(child: Text('Quantity', style: theme.textTheme.titleMedium)),
+        IconButton.outlined(
+          onPressed: quantity > 1 && !isSubmitting
+              ? () => onChanged(quantity - 1)
+              : null,
+          icon: const Icon(Icons.remove),
+          tooltip: 'Decrease quantity',
+        ),
+        SizedBox(
+          width: 56,
+          child: Text(
+            '$quantity',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge,
+          ),
+        ),
+        IconButton.outlined(
+          onPressed: isSubmitting ? null : () => onChanged(quantity + 1),
+          icon: const Icon(Icons.add),
+          tooltip: 'Increase quantity',
+        ),
+      ],
+    );
+  }
+}
+
+extension on ListItemDto {
+  String? get managementSubtitle {
+    final rawDescription = description?.trim();
+    final productDescription = familyProduct?.description?.trim();
+    final values = [
+      if (rawDescription != null &&
+          rawDescription.isNotEmpty &&
+          rawDescription != productName)
+        rawDescription,
+      if (productDescription != null &&
+          productDescription.isNotEmpty &&
+          productDescription != productName &&
+          productDescription != rawDescription)
+        productDescription,
+    ];
+
+    if (values.isEmpty) {
+      return null;
+    }
+
+    return values.join('\n');
   }
 }
