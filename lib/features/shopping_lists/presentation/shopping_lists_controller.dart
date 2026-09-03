@@ -24,6 +24,26 @@ class ShoppingListsSearchController extends Notifier<String> {
   }
 }
 
+final selectedShoppingListProvider =
+    NotifierProvider<SelectedShoppingListController, ShoppingListDto?>(
+      SelectedShoppingListController.new,
+    );
+
+class SelectedShoppingListController extends Notifier<ShoppingListDto?> {
+  @override
+  ShoppingListDto? build() => null;
+
+  void select(ShoppingListDto? list) {
+    state = list;
+  }
+
+  void clearIfSelected(int listId) {
+    if (state?.id == listId) {
+      state = null;
+    }
+  }
+}
+
 final shoppingListsControllerProvider =
     FutureProvider.autoDispose<List<ShoppingListDto>>((ref) async {
       final selectedFamily = ref.watch(selectedFamilyProvider);
@@ -39,6 +59,37 @@ final shoppingListsControllerProvider =
         throw ApiError.fromObject(error);
       }
     });
+
+final deleteShoppingListControllerProvider =
+    Provider.autoDispose<DeleteShoppingListController>(
+      DeleteShoppingListController.new,
+    );
+
+class DeleteShoppingListController {
+  const DeleteShoppingListController(this._ref);
+
+  final Ref _ref;
+
+  Future<void> delete(ShoppingListDto list) async {
+    final listId = list.id;
+    if (listId == null) {
+      throw const ApiError(message: 'List id is missing.');
+    }
+
+    await deleteById(listId);
+  }
+
+  Future<void> deleteById(int listId) async {
+    try {
+      await _ref.read(shoppingListsApiProvider).deleteList(listId);
+      _ref.read(selectedShoppingListProvider.notifier).clearIfSelected(listId);
+      _ref.invalidate(shoppingListsControllerProvider);
+    } catch (error) {
+      appLogger.debug('Lists: delete controller failed: $error');
+      throw ApiError.fromObject(error);
+    }
+  }
+}
 
 final filteredShoppingListsProvider =
     Provider.autoDispose<List<ShoppingListDto>>((ref) {

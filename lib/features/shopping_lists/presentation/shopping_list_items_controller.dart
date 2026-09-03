@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
+import '../data/product_search.dart';
 import '../data/shopping_list_models.dart';
 import '../data/shopping_lists_api.dart';
 
@@ -10,6 +11,23 @@ final shoppingListItemsControllerProvider =
       List<ListItemDto>,
       int
     >(ShoppingListItemsController.new);
+
+final addableProductCatalogProvider = FutureProvider.autoDispose
+    .family<AddableProductCatalog, int>((ref, familyId) async {
+      try {
+        final api = ref.read(shoppingListsApiProvider);
+        final results = await Future.wait([
+          api.getGlobalProducts(),
+          api.getFamilyProducts(familyId),
+        ]);
+        return AddableProductCatalog(
+          globalProducts: results[0] as List<ProductDto>,
+          familyProducts: results[1] as List<FamilyProductDto>,
+        );
+      } catch (error) {
+        throw ApiError.fromObject(error);
+      }
+    });
 
 class ShoppingListItemsController extends AsyncNotifier<List<ListItemDto>> {
   ShoppingListItemsController(this._familyListId);
@@ -28,7 +46,7 @@ class ShoppingListItemsController extends AsyncNotifier<List<ListItemDto>> {
 
   Future<void> createItem({
     required int familyId,
-    required String name,
+    required AddableProduct product,
     required int quantity,
     String? description,
   }) async {
@@ -36,20 +54,26 @@ class ShoppingListItemsController extends AsyncNotifier<List<ListItemDto>> {
 
     try {
       final api = ref.read(shoppingListsApiProvider);
-      final familyProduct = await api.createFamilyProduct(
-        familyId: familyId,
-        label: name,
-        description: description,
-      );
-      final familyProductId = familyProduct.id;
-      if (familyProductId == null) {
-        throw const ApiError(message: 'Created product has no id.');
+      var productId = product.productId;
+      var familyProductId = product.familyProductId;
+
+      if (product.kind == AddableProductKind.custom) {
+        final familyProduct = await api.createFamilyProduct(
+          familyId: familyId,
+          label: product.label,
+          description: description,
+        );
+        familyProductId = familyProduct.id;
+        if (familyProductId == null) {
+          throw const ApiError(message: 'Created product has no id.');
+        }
       }
 
       final created = await api.createItem(
         familyListId: _familyListId,
-        familyProductId: familyProductId,
         quantity: quantity,
+        productId: productId,
+        familyProductId: familyProductId,
         description: description,
       );
       state = AsyncData([...previousItems, created]);

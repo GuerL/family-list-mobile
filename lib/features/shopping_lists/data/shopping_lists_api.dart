@@ -40,6 +40,48 @@ class ShoppingListsApi {
     appLogger.debug('Lists: create request accepted by backend');
   }
 
+  Future<void> deleteList(int listId) async {
+    appLogger.debug('Lists: deleting /api/families-list/$listId');
+    await _dio.delete<void>('/api/families-list/$listId');
+  }
+
+  Future<List<ProductDto>> getGlobalProducts() async {
+    appLogger.debug('List detail: fetching /api/products');
+    final response = await _dio.get<List<dynamic>>('/api/products');
+    final products = <ProductDto>[];
+    for (final entry in response.data ?? const []) {
+      if (entry is! Map<String, dynamic>) {
+        appLogger.debug(
+          'List detail: skipped unexpected product payload entry',
+        );
+        continue;
+      }
+
+      products.add(ProductDto.fromJson(entry));
+    }
+    return products;
+  }
+
+  Future<List<FamilyProductDto>> getFamilyProducts(int familyId) async {
+    appLogger.debug('List detail: fetching /api/family-products');
+    final response = await _dio.get<List<dynamic>>(
+      '/api/family-products',
+      queryParameters: {'familyId': familyId},
+    );
+    final products = <FamilyProductDto>[];
+    for (final entry in response.data ?? const []) {
+      if (entry is! Map<String, dynamic>) {
+        appLogger.debug(
+          'List detail: skipped unexpected family product payload entry',
+        );
+        continue;
+      }
+
+      products.add(FamilyProductDto.fromJson(entry));
+    }
+    return products;
+  }
+
   Future<List<ListItemDto>> getItems(int familyListId) async {
     appLogger.debug('List detail: fetching /api/list-items');
     final response = await _dio.get<List<dynamic>>(
@@ -66,8 +108,9 @@ class ShoppingListsApi {
 
   Future<ListItemDto> createItem({
     required int familyListId,
-    required int familyProductId,
     required int quantity,
+    int? productId,
+    int? familyProductId,
     String? description,
   }) async {
     appLogger.debug('List detail: creating item for list $familyListId');
@@ -75,7 +118,7 @@ class ShoppingListsApi {
       '/api/list-items',
       data: {
         'familyListId': familyListId,
-        'productId': null,
+        'productId': productId,
         'familyProductId': familyProductId,
         'quantity': quantity,
         'description': description,

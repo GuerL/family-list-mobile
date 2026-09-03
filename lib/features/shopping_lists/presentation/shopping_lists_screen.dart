@@ -119,7 +119,11 @@ class _ShoppingListsScreenState extends ConsumerState<ShoppingListsScreen> {
                         itemCount: filteredLists.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
-                          return _ShoppingListCard(list: filteredLists[index]);
+                          return _ShoppingListCard(
+                            list: filteredLists[index],
+                            onDelete: () =>
+                                _confirmDeleteList(filteredLists[index]),
+                          );
                         },
                       ),
                     );
@@ -221,6 +225,44 @@ class _ShoppingListsScreenState extends ConsumerState<ShoppingListsScreen> {
       await _reloadLists();
     }
   }
+
+  Future<void> _confirmDeleteList(ShoppingListDto list) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete "${list.description}"?'),
+        content: const Text('This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true || !mounted) {
+      return;
+    }
+
+    try {
+      await ref.read(deleteShoppingListControllerProvider).delete(list);
+      if (mounted) {
+        await _reloadLists();
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final apiError = ApiError.fromObject(error);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(apiError.message)));
+    }
+  }
 }
 
 class _ListsToolbar extends StatelessWidget {
@@ -315,9 +357,10 @@ class _NoFamilySelected extends StatelessWidget {
 }
 
 class _ShoppingListCard extends StatelessWidget {
-  const _ShoppingListCard({required this.list});
+  const _ShoppingListCard({required this.list, required this.onDelete});
 
   final ShoppingListDto list;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -338,7 +381,30 @@ class _ShoppingListCard extends StatelessWidget {
         ),
         subtitle: Text('${list.family.name}\n$meta'),
         isThreeLine: true,
-        trailing: const Icon(Icons.chevron_right),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.chevron_right),
+            PopupMenuButton<_ShoppingListAction>(
+              tooltip: 'List actions',
+              onSelected: (action) {
+                switch (action) {
+                  case _ShoppingListAction.delete:
+                    onDelete();
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _ShoppingListAction.delete,
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline),
+                    title: Text('Delete list'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
         onTap: () {
           final listId = list.id;
           if (listId == null) {
@@ -357,6 +423,8 @@ class _ShoppingListCard extends StatelessWidget {
         '${local.year}';
   }
 }
+
+enum _ShoppingListAction { delete }
 
 class _CreateListSheet extends ConsumerStatefulWidget {
   const _CreateListSheet();
