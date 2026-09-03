@@ -24,12 +24,12 @@ class ShoppingListsApi {
     return _parseListResponse(response.data);
   }
 
-  Future<ShoppingListDto> createList({
+  Future<void> createList({
     required FamilyDto family,
     required String description,
   }) async {
     appLogger.debug('Lists: creating list with /api/families-list');
-    final response = await _dio.post<Map<String, dynamic>>(
+    await _dio.post<void>(
       '/api/families-list',
       data: {
         'description': description,
@@ -37,14 +37,24 @@ class ShoppingListsApi {
         'listItems': <Map<String, dynamic>>[],
       },
     );
-    return ShoppingListDto.fromJson(response.data ?? <String, dynamic>{});
+    appLogger.debug('Lists: create request accepted by backend');
   }
 
   List<ShoppingListDto> _parseListResponse(List<dynamic>? data) {
-    final lists = (data ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .map(ShoppingListDto.fromJson)
-        .toList();
+    final lists = <ShoppingListDto>[];
+    for (final entry in data ?? const []) {
+      if (entry is! Map<String, dynamic>) {
+        appLogger.debug('Lists: skipped unexpected list payload entry');
+        continue;
+      }
+
+      try {
+        lists.add(ShoppingListDto.fromJson(entry));
+      } catch (error) {
+        appLogger.debug('Lists: failed to parse list payload: $error');
+        rethrow;
+      }
+    }
     appLogger.debug('Lists: received ${lists.length} lists');
     return lists;
   }

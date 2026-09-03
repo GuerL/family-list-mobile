@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/debug/app_logger.dart';
 import '../../../core/network/api_error.dart';
 import '../../../shared/widgets/async_value_view.dart';
 import '../../../shared/widgets/empty_state.dart';
@@ -214,6 +215,7 @@ class _ShoppingListsScreenState extends ConsumerState<ShoppingListsScreen> {
     );
 
     if (created == true && mounted) {
+      appLogger.debug('Lists: create sheet closed, refreshing lists');
       await _reloadLists();
     }
   }
@@ -435,10 +437,14 @@ class _CreateListSheetState extends ConsumerState<_CreateListSheet> {
       await ref
           .read(createShoppingListControllerProvider)
           .create(_descriptionController.text.trim());
+      appLogger.debug('Lists: create sheet succeeded, closing sheet');
       if (mounted) {
         Navigator.of(context).pop(true);
       }
     } catch (error) {
+      appLogger.debug(
+        'Lists: create sheet failed: ${error.runtimeType} - $error',
+      );
       if (!mounted) {
         return;
       }

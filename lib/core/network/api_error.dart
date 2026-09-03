@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 class ApiError implements Exception {
   const ApiError({
@@ -22,7 +23,11 @@ class ApiError implements Exception {
       return fromDioException(error);
     }
 
-    return const ApiError(message: 'Something went wrong.');
+    return ApiError(
+      message: kDebugMode
+          ? 'Something went wrong: ${error.runtimeType}'
+          : 'Something went wrong.',
+    );
   }
 
   static ApiError fromDioException(DioException error) {

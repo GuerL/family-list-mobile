@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/debug/app_logger.dart';
 import '../../../core/network/api_error.dart';
 import '../../families/presentation/selected_family_provider.dart';
 import '../data/shopping_list_models.dart';
@@ -79,8 +80,8 @@ class CreateShoppingListController {
       await _ref
           .read(shoppingListsApiProvider)
           .createList(family: selectedFamily, description: description);
-      _ref.invalidate(shoppingListsControllerProvider);
     } catch (error) {
+      appLogger.debug('Lists: create controller failed: $error');
       throw ApiError.fromObject(error);
     }
   }
