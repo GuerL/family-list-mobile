@@ -53,3 +53,120 @@ class ShoppingListItemSummaryDto {
 
   Map<String, dynamic> toJson() => _$ShoppingListItemSummaryDtoToJson(this);
 }
+
+@JsonSerializable()
+class ListItemDto {
+  const ListItemDto({
+    this.id,
+    this.description,
+    this.quantity,
+    this.product,
+    this.familyProduct,
+    this.familyList,
+    this.purchased,
+    this.purchasedAt,
+    this.purchasedBy,
+  });
+
+  final int? id;
+  final String? description;
+  final int? quantity;
+  final ProductDto? product;
+  final FamilyProductDto? familyProduct;
+  final ShoppingListReferenceDto? familyList;
+  final bool? purchased;
+  final DateTime? purchasedAt;
+  final PurchasedByDto? purchasedBy;
+
+  String get productName =>
+      product?.label ?? familyProduct?.label ?? description ?? 'Unnamed item';
+
+  ListItemDto copyWithPurchased(bool value) {
+    return ListItemDto(
+      id: id,
+      description: description,
+      quantity: quantity,
+      product: product,
+      familyProduct: familyProduct,
+      familyList: familyList,
+      purchased: value,
+      purchasedAt: value ? DateTime.now() : null,
+      purchasedBy: value ? purchasedBy : null,
+    );
+  }
+
+  factory ListItemDto.fromJson(Map<String, dynamic> json) =>
+      _$ListItemDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ListItemDtoToJson(this);
+}
+
+@JsonSerializable()
+class ProductDto {
+  const ProductDto({this.id, this.label, this.imageUrl});
+
+  final int? id;
+  final String? label;
+  final String? imageUrl;
+
+  factory ProductDto.fromJson(Map<String, dynamic> json) =>
+      _$ProductDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ProductDtoToJson(this);
+}
+
+@JsonSerializable()
+class FamilyProductDto {
+  const FamilyProductDto({
+    this.id,
+    this.label,
+    this.description,
+    this.familyId,
+  });
+
+  final int? id;
+  final String? label;
+  final String? description;
+  final int? familyId;
+
+  factory FamilyProductDto.fromJson(Map<String, dynamic> json) =>
+      _$FamilyProductDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$FamilyProductDtoToJson(this);
+}
+
+@JsonSerializable()
+class ShoppingListReferenceDto {
+  const ShoppingListReferenceDto({this.id, this.description, this.createdAt});
+
+  final int? id;
+  final String? description;
+  final DateTime? createdAt;
+
+  factory ShoppingListReferenceDto.fromJson(Map<String, dynamic> json) =>
+      _$ShoppingListReferenceDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ShoppingListReferenceDtoToJson(this);
+}
+
+@JsonSerializable()
+class PurchasedByDto {
+  const PurchasedByDto({this.id, this.firstName, this.lastName});
+
+  final int? id;
+  final String? firstName;
+  final String? lastName;
+
+  String get displayName {
+    final name = [
+      firstName,
+      lastName,
+    ].where((value) => value != null && value.trim().isNotEmpty).join(' ');
+    return name.isEmpty ? 'Someone' : name;
+  }
+
+  factory PurchasedByDto.fromJson(Map<String, dynamic> json) =>
+      _$PurchasedByDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$PurchasedByDtoToJson(this);
+}

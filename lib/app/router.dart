@@ -8,6 +8,8 @@ import '../features/authentication/presentation/auth_controller.dart';
 import '../features/authentication/presentation/login_screen.dart';
 import '../features/families/presentation/families_screen.dart';
 import '../features/shopping/presentation/shopping_placeholder_screen.dart';
+import '../features/shopping_lists/data/shopping_list_models.dart';
+import '../features/shopping_lists/presentation/shopping_list_detail_screen.dart';
 import '../features/shopping_lists/presentation/shopping_lists_screen.dart';
 import 'main_scaffold.dart';
 
@@ -41,6 +43,21 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: ShoppingListsScreen.routePath,
                 builder: (context, state) => const ShoppingListsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':listId',
+                    builder: (context, state) {
+                      final listId = int.parse(state.pathParameters['listId']!);
+                      final list = state.extra is ShoppingListDto
+                          ? state.extra! as ShoppingListDto
+                          : null;
+                      return ShoppingListDetailScreen(
+                        listId: listId,
+                        listName: list?.description ?? 'List',
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),

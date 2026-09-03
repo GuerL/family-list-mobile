@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/debug/app_logger.dart';
 import '../../../core/network/api_error.dart';
@@ -9,6 +10,7 @@ import '../../families/data/family_models.dart';
 import '../../families/presentation/families_controller.dart';
 import '../../families/presentation/selected_family_provider.dart';
 import '../data/shopping_list_models.dart';
+import 'shopping_list_detail_screen.dart';
 import 'shopping_lists_controller.dart';
 
 class ShoppingListsScreen extends ConsumerStatefulWidget {
@@ -338,9 +340,11 @@ class _ShoppingListCard extends StatelessWidget {
         isThreeLine: true,
         trailing: const Icon(Icons.chevron_right),
         onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('List detail will be added next.')),
-          );
+          final listId = list.id;
+          if (listId == null) {
+            return;
+          }
+          context.push(ShoppingListDetailScreen.routePath(listId), extra: list);
         },
       ),
     );
