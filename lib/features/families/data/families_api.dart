@@ -26,4 +26,52 @@ class FamiliesApi {
     appLogger.debug('Families: received ${families.length} families');
     return families;
   }
+
+  Future<FamilyDto> getFamily(int familyId) async {
+    appLogger.debug('Families: fetching /api/families/$familyId');
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/families/$familyId',
+    );
+    return FamilyDto.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  Future<FamilyDto> createFamily({
+    required String name,
+    required String description,
+    String? imageUrl,
+  }) async {
+    appLogger.debug('Families: creating /api/families');
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/families',
+      data: {
+        'name': name,
+        'description': description,
+        'members': <Map<String, dynamic>>[],
+        'imageUrl': imageUrl,
+      },
+    );
+    return FamilyDto.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  Future<FamilyDto> updateFamily(FamilyDto family) async {
+    appLogger.debug('Families: updating /api/families');
+    final response = await _dio.put<Map<String, dynamic>>(
+      '/api/families',
+      data: family.toJson(),
+    );
+    return FamilyDto.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  Future<void> deleteFamily(int familyId) async {
+    appLogger.debug('Families: deleting /api/families/$familyId');
+    await _dio.delete<void>('/api/families/$familyId');
+  }
+
+  Future<FamilyDto> joinFamily(String inviteCode) async {
+    appLogger.debug('Families: accepting invitation');
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/families/accept-invitation/${Uri.encodeComponent(inviteCode)}',
+    );
+    return FamilyDto.fromJson(response.data ?? <String, dynamic>{});
+  }
 }

@@ -42,6 +42,12 @@ class SelectedShoppingListController extends Notifier<ShoppingListDto?> {
       state = null;
     }
   }
+
+  void clearIfFamilySelected(int familyId) {
+    if (state?.family.id == familyId) {
+      state = null;
+    }
+  }
 }
 
 final shoppingListsControllerProvider =

@@ -1,20 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_error.dart';
 import '../../../shared/widgets/async_value_view.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../authentication/presentation/auth_controller.dart';
 import '../data/family_models.dart';
+import 'family_detail_screen.dart';
 import 'families_controller.dart';
 import 'selected_family_provider.dart';
 
-class FamiliesScreen extends ConsumerWidget {
+class FamiliesScreen extends ConsumerStatefulWidget {
   const FamiliesScreen({super.key});
 
   static const routePath = '/families';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FamiliesScreen> createState() => _FamiliesScreenState();
+}
+
+class _FamiliesScreenState extends ConsumerState<FamiliesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ref.listenManual(familiesControllerProvider, (_, next) {
+      next.whenData(_syncSelectedFamily);
+    }, fireImmediately: true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
     final user = authState.whenOrNull(data: (session) => session?.user);
 
@@ -36,6 +52,11 @@ class FamiliesScreen extends ConsumerWidget {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showCreateFamilySheet(),
+        icon: const Icon(Icons.add),
+        label: const Text('Create family'),
+      ),
       body: RefreshIndicator(
         onRefresh: () => _reloadFamilies(ref),
         child: AsyncValueView<List<FamilyDto>>(
@@ -44,9 +65,8 @@ class FamiliesScreen extends ConsumerWidget {
           data: (families) {
             if (families.isEmpty) {
               return _FamiliesEmptyState(
-                userName: user.fullName,
-                onCreateFamily: () => _showComingSoon(context, 'Create family'),
-                onJoinFamily: () => _showComingSoon(context, 'Join family'),
+                onCreateFamily: _showCreateFamilySheet,
+                onJoinFamily: _showJoinFamilySheet,
               );
             }
 
@@ -60,15 +80,12 @@ class FamiliesScreen extends ConsumerWidget {
                   return _FamiliesHeader(
                     userName: user.fullName,
                     familyCount: families.length,
+                    onJoinFamily: _showJoinFamilySheet,
                   );
                 }
 
                 if (index == 1) {
-                  return _FamilyActions(
-                    onCreateFamily: () =>
-                        _showComingSoon(context, 'Create family'),
-                    onJoinFamily: () => _showComingSoon(context, 'Join family'),
-                  );
+                  return const SizedBox(height: 2);
                 }
 
                 final family = families[index - 2];
@@ -76,8 +93,13 @@ class FamiliesScreen extends ConsumerWidget {
                 return _FamilyCard(
                   family: family,
                   isSelected: isSelected,
-                  onTap: () =>
-                      ref.read(selectedFamilyProvider.notifier).select(family),
+                  onTap: () {
+                    ref.read(selectedFamilyProvider.notifier).select(family);
+                    final familyId = family.id;
+                    if (familyId != null) {
+                      context.push(FamilyDetailScreen.routePath(familyId));
+                    }
+                  },
                 );
               },
             );
@@ -87,14 +109,75 @@ class FamiliesScreen extends ConsumerWidget {
     );
   }
 
+  void _syncSelectedFamily(List<FamilyDto> families) {
+    final selectedFamily = ref.read(selectedFamilyProvider);
+    if (families.isEmpty) {
+      ref.read(selectedFamilyProvider.notifier).select(null);
+      return;
+    }
+
+    if (selectedFamily != null &&
+        families.any((family) => family.id == selectedFamily.id)) {
+      return;
+    }
+
+    ref
+        .read(selectedFamilyProvider.notifier)
+        .select(families.length == 1 ? families.first : null);
+  }
+
   Future<void> _reloadFamilies(WidgetRef ref) async {
     ref.invalidate(familiesControllerProvider);
     await ref.read(familiesControllerProvider.future);
   }
 
-  void _showComingSoon(BuildContext context, String action) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('$action will be added later.')));
+  Future<void> _showCreateFamilySheet() async {
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => FamilyFormSheet(
+        title: 'Create family',
+        initialName: '',
+        initialDescription: '',
+        initialImageUrl: null,
+        submitLabel: 'Create',
+        onSubmit: (name, description, imageUrl) async {
+          await ref
+              .read(familyManagementControllerProvider)
+              .create(name: name, description: description, imageUrl: imageUrl);
+        },
+      ),
+    );
+
+    if (created == true && mounted) {
+      await _reloadFamilies(ref);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Family created.')));
+      }
+    }
+  }
+
+  Future<void> _showJoinFamilySheet() async {
+    final joined = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _JoinFamilySheet(
+        onSubmit: (inviteCode) async {
+          await ref.read(familyManagementControllerProvider).join(inviteCode);
+        },
+      ),
+    );
+
+    if (joined == true && mounted) {
+      await _reloadFamilies(ref);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Family joined.')));
+      }
+    }
   }
 }
 
@@ -158,10 +241,15 @@ class _AccountMenu extends StatelessWidget {
 enum _AccountAction { logout }
 
 class _FamiliesHeader extends StatelessWidget {
-  const _FamiliesHeader({required this.userName, required this.familyCount});
+  const _FamiliesHeader({
+    required this.userName,
+    required this.familyCount,
+    required this.onJoinFamily,
+  });
 
   final String? userName;
   final int familyCount;
+  final VoidCallback onJoinFamily;
 
   @override
   Widget build(BuildContext context) {
@@ -185,53 +273,27 @@ class _FamiliesHeader extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: onJoinFamily,
+              icon: const Icon(Icons.group_add_outlined),
+              label: const Text('Join family'),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _FamilyActions extends StatelessWidget {
-  const _FamilyActions({
-    required this.onCreateFamily,
-    required this.onJoinFamily,
-  });
-
-  final VoidCallback onCreateFamily;
-  final VoidCallback onJoinFamily;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: onCreateFamily,
-            icon: const Icon(Icons.add),
-            label: const Text('Create'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onJoinFamily,
-            icon: const Icon(Icons.group_add_outlined),
-            label: const Text('Join'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _FamiliesEmptyState extends StatelessWidget {
   const _FamiliesEmptyState({
-    required this.userName,
     required this.onCreateFamily,
     required this.onJoinFamily,
   });
 
-  final String? userName;
   final VoidCallback onCreateFamily;
   final VoidCallback onJoinFamily;
 
@@ -261,6 +323,111 @@ class _FamiliesEmptyState extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _JoinFamilySheet extends StatefulWidget {
+  const _JoinFamilySheet({required this.onSubmit});
+
+  final Future<void> Function(String inviteCode) onSubmit;
+
+  @override
+  State<_JoinFamilySheet> createState() => _JoinFamilySheetState();
+}
+
+class _JoinFamilySheetState extends State<_JoinFamilySheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _inviteCodeController = TextEditingController();
+  bool _isSubmitting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _inviteCodeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final theme = Theme.of(context);
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Join family', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Enter the invite code shared by a family member.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _inviteCodeController,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(labelText: 'Invite code'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Invite code is required.';
+                  }
+                  return null;
+                },
+                onFieldSubmitted: (_) => _submit(),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+              ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                child: _isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Join family'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate() || _isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+
+    try {
+      await widget.onSubmit(_inviteCodeController.text.trim());
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = ApiError.fromObject(error).message;
+        _isSubmitting = false;
+      });
+    }
   }
 }
 
