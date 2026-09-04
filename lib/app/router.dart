@@ -8,7 +8,7 @@ import '../features/authentication/presentation/auth_controller.dart';
 import '../features/authentication/presentation/login_screen.dart';
 import '../features/families/presentation/families_screen.dart';
 import '../features/families/presentation/family_detail_screen.dart';
-import '../features/shopping/presentation/shopping_placeholder_screen.dart';
+import '../features/shopping/presentation/shopping_screen.dart';
 import '../features/shopping_lists/data/shopping_list_models.dart';
 import '../features/shopping_lists/presentation/shopping_list_detail_screen.dart';
 import '../features/shopping_lists/presentation/shopping_lists_screen.dart';
@@ -77,8 +77,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: ShoppingPlaceholderScreen.routePath,
-                builder: (context, state) => const ShoppingPlaceholderScreen(),
+                path: ShoppingScreen.routePath,
+                builder: (context, state) => const ShoppingScreen(),
               ),
             ],
           ),

@@ -33,6 +33,7 @@ class ShoppingListItemsController extends AsyncNotifier<List<ListItemDto>> {
   ShoppingListItemsController(this._familyListId);
 
   final int _familyListId;
+  final Set<int> _pendingPurchasedToggles = <int>{};
 
   @override
   Future<List<ListItemDto>> build() async {
@@ -137,6 +138,53 @@ class ShoppingListItemsController extends AsyncNotifier<List<ListItemDto>> {
       final apiError = ApiError.fromObject(error);
       state = AsyncError(apiError, stackTrace);
       throw apiError;
+    }
+  }
+
+  bool isPurchasedTogglePending(int itemId) {
+    return _pendingPurchasedToggles.contains(itemId);
+  }
+
+  Future<void> togglePurchased({
+    required ListItemDto item,
+    required bool purchased,
+  }) async {
+    final itemId = item.id;
+    if (itemId == null || _pendingPurchasedToggles.contains(itemId)) {
+      return;
+    }
+
+    final previousItems = state.value ?? const <ListItemDto>[];
+    _pendingPurchasedToggles.add(itemId);
+    state = AsyncData(
+      previousItems
+          .map(
+            (current) => current.id == itemId
+                ? current.copyWith(
+                    purchased: purchased,
+                    clearPurchasedAt: !purchased,
+                    clearPurchasedBy: !purchased,
+                  )
+                : current,
+          )
+          .toList(),
+    );
+
+    try {
+      final updated = await ref
+          .read(shoppingListsApiProvider)
+          .togglePurchased(itemId: itemId, purchased: purchased);
+      final currentItems = state.value ?? previousItems;
+      state = AsyncData(
+        currentItems
+            .map((current) => current.id == itemId ? updated : current)
+            .toList(),
+      );
+    } catch (error) {
+      state = AsyncData(previousItems);
+      throw ApiError.fromObject(error);
+    } finally {
+      _pendingPurchasedToggles.remove(itemId);
     }
   }
 

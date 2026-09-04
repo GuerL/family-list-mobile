@@ -152,6 +152,18 @@ class ShoppingListsApi {
     await _dio.delete<void>('/api/list-items/$itemId');
   }
 
+  Future<ListItemDto> togglePurchased({
+    required int itemId,
+    required bool purchased,
+  }) async {
+    appLogger.debug('Shopping: patching /api/list-items/$itemId/purchased');
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/api/list-items/$itemId/purchased',
+      data: {'purchased': purchased},
+    );
+    return ListItemDto.fromJson(response.data ?? <String, dynamic>{});
+  }
+
   Future<FamilyProductDto> createFamilyProduct({
     required int familyId,
     required String label,

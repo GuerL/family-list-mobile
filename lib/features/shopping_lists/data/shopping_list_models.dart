@@ -81,6 +81,32 @@ class ListItemDto {
   String get productName =>
       product?.label ?? familyProduct?.label ?? description ?? 'Unnamed item';
 
+  ListItemDto copyWith({
+    int? id,
+    String? description,
+    int? quantity,
+    ProductDto? product,
+    FamilyProductDto? familyProduct,
+    ShoppingListReferenceDto? familyList,
+    bool? purchased,
+    DateTime? purchasedAt,
+    PurchasedByDto? purchasedBy,
+    bool clearPurchasedAt = false,
+    bool clearPurchasedBy = false,
+  }) {
+    return ListItemDto(
+      id: id ?? this.id,
+      description: description ?? this.description,
+      quantity: quantity ?? this.quantity,
+      product: product ?? this.product,
+      familyProduct: familyProduct ?? this.familyProduct,
+      familyList: familyList ?? this.familyList,
+      purchased: purchased ?? this.purchased,
+      purchasedAt: clearPurchasedAt ? null : purchasedAt ?? this.purchasedAt,
+      purchasedBy: clearPurchasedBy ? null : purchasedBy ?? this.purchasedBy,
+    );
+  }
+
   factory ListItemDto.fromJson(Map<String, dynamic> json) =>
       _$ListItemDtoFromJson(json);
 
