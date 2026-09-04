@@ -53,6 +53,25 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
       appBar: AppBar(
         title: const Text('Products'),
         actions: [
+          if (canManageGlobal)
+            PopupMenuButton<_ProductsAdminAction>(
+              tooltip: 'Product administration',
+              onSelected: (action) {
+                switch (action) {
+                  case _ProductsAdminAction.manageCategories:
+                    _openManageCategories();
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _ProductsAdminAction.manageCategories,
+                  child: ListTile(
+                    leading: Icon(Icons.category_outlined),
+                    title: Text('Manage categories'),
+                  ),
+                ),
+              ],
+            ),
           IconButton(
             tooltip: 'Add product',
             onPressed:
@@ -210,6 +229,14 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     if (selected != null) {
       ref.read(selectedFamilyProvider.notifier).select(selected);
     }
+  }
+
+  Future<void> _openManageCategories() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => const _ManageCategoriesScreen(),
+      ),
+    );
   }
 
   Future<void> _showAddProductSheet(bool canManageGlobal) async {
@@ -378,6 +405,8 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
   }
 }
 
+enum _ProductsAdminAction { manageCategories }
+
 class _ProductsToolbar extends StatelessWidget {
   const _ProductsToolbar({
     required this.families,
@@ -479,6 +508,8 @@ class _ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Card(
       child: ListTile(
         contentPadding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
@@ -494,7 +525,13 @@ class _ProductTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             const SizedBox(height: 4),
-            _ScopeBadge(label: product.scopeLabel),
+            Text(
+              product.metadataLine,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
         trailing: Row(
@@ -681,6 +718,7 @@ class _ProductDetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final familyName = product.isFamily ? product.family?.name : null;
+    final categoryName = product.categoryName;
 
     return SafeArea(
       child: Padding(
@@ -709,6 +747,15 @@ class _ProductDetailsSheet extends StatelessWidget {
               const SizedBox(height: 12),
               Text(product.subtitle!, style: theme.textTheme.bodyLarge),
             ],
+            if (categoryName != null && categoryName != product.subtitle) ...[
+              const SizedBox(height: 12),
+              Text(
+                categoryName,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             if (familyName != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -730,6 +777,247 @@ class _ProductDetailsSheet extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ManageCategoriesScreen extends ConsumerWidget {
+  const _ManageCategoriesScreen();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categoriesState = ref.watch(productCategoriesProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Categories'),
+        actions: [
+          IconButton(
+            tooltip: 'Add category',
+            onPressed: () => _showCategoryForm(context, ref),
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
+      body: AsyncValueView<List<ProductCategoryDto>>(
+        value: categoriesState,
+        onRetry: () async {
+          ref.invalidate(productCategoriesProvider);
+          await ref.read(productCategoriesProvider.future);
+        },
+        data: (categories) {
+          if (categories.isEmpty) {
+            return EmptyState(
+              title: 'No categories found',
+              message: 'Create categories for global products.',
+              action: FilledButton.icon(
+                onPressed: () => _showCategoryForm(context, ref),
+                icon: const Icon(Icons.add),
+                label: const Text('Add category'),
+              ),
+            );
+          }
+
+          final sorted = [...categories]
+            ..sort(
+              (a, b) => (a.name ?? '').toLowerCase().compareTo(
+                (b.name ?? '').toLowerCase(),
+              ),
+            );
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(productCategoriesProvider);
+              await ref.read(productCategoriesProvider.future);
+            },
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              itemCount: sorted.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final category = sorted[index];
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.category_outlined),
+                    title: Text(
+                      category.name?.trim().isNotEmpty == true
+                          ? category.name!.trim()
+                          : 'Unnamed category',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(_linkedProductLabel(category)),
+                    trailing: PopupMenuButton<_CategoryAction>(
+                      tooltip: 'Category actions',
+                      onSelected: (action) {
+                        switch (action) {
+                          case _CategoryAction.edit:
+                            _showCategoryForm(context, ref, category: category);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: _CategoryAction.edit,
+                          child: ListTile(
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Edit'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _linkedProductLabel(ProductCategoryDto category) {
+    final count = category.linkedProductCount;
+    if (count == 0) {
+      return 'No linked products';
+    }
+    return '$count linked product${count == 1 ? '' : 's'}';
+  }
+
+  Future<void> _showCategoryForm(
+    BuildContext context,
+    WidgetRef ref, {
+    ProductCategoryDto? category,
+  }) async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _CategoryFormSheet(
+        category: category,
+        onSubmit: (name) {
+          final id = category?.id;
+          if (id == null) {
+            return ref
+                .read(productManagementControllerProvider)
+                .createProductCategory(name: name);
+          }
+          return ref
+              .read(productManagementControllerProvider)
+              .updateProductCategory(id: id, name: name);
+        },
+      ),
+    );
+  }
+}
+
+enum _CategoryAction { edit }
+
+class _CategoryFormSheet extends StatefulWidget {
+  const _CategoryFormSheet({required this.onSubmit, this.category});
+
+  final ProductCategoryDto? category;
+  final Future<void> Function(String name) onSubmit;
+
+  @override
+  State<_CategoryFormSheet> createState() => _CategoryFormSheetState();
+}
+
+class _CategoryFormSheetState extends State<_CategoryFormSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  bool _isSubmitting = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.category?.name ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final theme = Theme.of(context);
+    final isEditing = widget.category != null;
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                isEditing ? 'Edit category' : 'Add category',
+                style: theme.textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _nameController,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(labelText: 'Category name'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Category name is required.';
+                  }
+                  return null;
+                },
+                onFieldSubmitted: (_) => _submit(),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+              ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                child: _isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate() || _isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+
+    try {
+      await widget.onSubmit(_nameController.text.trim());
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = ApiError.fromObject(error).message;
+        _isSubmitting = false;
+      });
+    }
   }
 }
 

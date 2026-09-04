@@ -35,6 +35,29 @@ class ProductsApi {
     return _parseList(response.data, ProductCategoryDto.fromJson);
   }
 
+  Future<ProductCategoryDto> createProductCategory({
+    required String name,
+  }) async {
+    appLogger.debug('Products: creating /api/product-categories');
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/product-categories',
+      data: ProductCategoryDto(name: name).toJson(),
+    );
+    return ProductCategoryDto.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  Future<ProductCategoryDto> updateProductCategory({
+    required int id,
+    required String name,
+  }) async {
+    appLogger.debug('Products: updating /api/product-categories');
+    final response = await _dio.put<Map<String, dynamic>>(
+      '/api/product-categories',
+      data: ProductCategoryDto(id: id, name: name).toJson(),
+    );
+    return ProductCategoryDto.fromJson(response.data ?? <String, dynamic>{});
+  }
+
   Future<FamilyProductDto> createFamilyProduct({
     required int familyId,
     required String label,

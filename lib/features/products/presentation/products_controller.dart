@@ -192,4 +192,29 @@ class ProductManagementController {
       throw ApiError.fromObject(error);
     }
   }
+
+  Future<void> createProductCategory({required String name}) async {
+    try {
+      await _ref.read(productsApiProvider).createProductCategory(name: name);
+      _ref.invalidate(productCategoriesProvider);
+      _ref.invalidate(productsControllerProvider);
+    } catch (error) {
+      throw ApiError.fromObject(error);
+    }
+  }
+
+  Future<void> updateProductCategory({
+    required int id,
+    required String name,
+  }) async {
+    try {
+      await _ref
+          .read(productsApiProvider)
+          .updateProductCategory(id: id, name: name);
+      _ref.invalidate(productCategoriesProvider);
+      _ref.invalidate(productsControllerProvider);
+    } catch (error) {
+      throw ApiError.fromObject(error);
+    }
+  }
 }

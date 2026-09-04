@@ -5,19 +5,26 @@ enum ProductScope { all, family, global }
 enum ProductKind { family, global }
 
 class ProductCategoryDto {
-  const ProductCategoryDto({this.id, this.name});
+  const ProductCategoryDto({this.id, this.name, this.linkedProductCount = 0});
 
   final int? id;
   final String? name;
+  final int linkedProductCount;
 
   factory ProductCategoryDto.fromJson(Map<String, dynamic> json) {
+    final linkedProducts = json['linkedProducts'];
     return ProductCategoryDto(
       id: json['id'] as int?,
       name: json['name'] as String?,
+      linkedProductCount: linkedProducts is List ? linkedProducts.length : 0,
     );
   }
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'linkedProducts': null,
+  };
 }
 
 class GlobalProductDto {
@@ -120,6 +127,17 @@ class ProductEntry {
     return _displayTextOrNull(value);
   }
 
+  String? get categoryName =>
+      _displayTextOrNull(globalProduct?.productCategory?.name);
+
+  String get metadataLine {
+    final category = categoryName;
+    if (category == null) {
+      return scopeLabel;
+    }
+    return '$category · $scopeLabel';
+  }
+
   String? get imageUrl => globalProduct?.imageUrl;
 
   String get scopeLabel => kind == ProductKind.family ? 'Family' : 'Global';
@@ -150,7 +168,8 @@ List<ProductEntry> filterProducts({
     }
 
     return _normalize(product.name).contains(normalizedQuery) ||
-        _normalize(product.subtitle ?? '').contains(normalizedQuery);
+        _normalize(product.subtitle ?? '').contains(normalizedQuery) ||
+        _normalize(product.categoryName ?? '').contains(normalizedQuery);
   }).toList();
 }
 

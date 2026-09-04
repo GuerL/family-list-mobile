@@ -9,6 +9,26 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('product parsing', () {
+    test('parses category JSON and writes backend record shape', () {
+      final category = ProductCategoryDto.fromJson({
+        'id': 3,
+        'name': 'Seafood',
+        'linkedProducts': [
+          {'id': 1, 'label': 'Saumon'},
+          {'id': 2, 'label': 'Tuna'},
+        ],
+      });
+
+      expect(category.id, 3);
+      expect(category.name, 'Seafood');
+      expect(category.linkedProductCount, 2);
+      expect(category.toJson(), {
+        'id': 3,
+        'name': 'Seafood',
+        'linkedProducts': null,
+      });
+    });
+
     test('parses global products with image and category', () {
       final product = GlobalProductDto.fromJson({
         'id': 1,
@@ -39,6 +59,25 @@ void main() {
   });
 
   group('product filtering', () {
+    test('displays category in global product metadata', () {
+      final product = ProductEntry.global(
+        const GlobalProductDto(
+          id: 2,
+          label: 'Saumon',
+          productCategory: ProductCategoryDto(id: 3, name: 'Seafood'),
+        ),
+      );
+
+      expect(product.categoryName, 'Seafood');
+      expect(product.metadataLine, 'Seafood · Global');
+      expect(
+        ProductEntry.family(
+          const FamilyProductDto(id: 1, label: 'House cereal'),
+        ).metadataLine,
+        'Family',
+      );
+    });
+
     test('filters all, family, and global products', () {
       final products = [
         ProductEntry.family(
@@ -148,6 +187,70 @@ void main() {
       expect(canManageGlobalProducts(['ROLE_ADMIN']), isTrue);
       expect(canManageGlobalProducts(['ROLE_SUPER_ADMIN']), isTrue);
     });
+
+    test('uses the same admin gate for category management visibility', () {
+      expect(canManageGlobalProducts(['ROLE_USER']), isFalse);
+      expect(canManageGlobalProducts(['ROLE_ADMIN']), isTrue);
+    });
+  });
+
+  group('category selector payloads', () {
+    test('creating a global product sends selected category', () async {
+      final api = _FakeProductsApi();
+      final container = _containerWith(api);
+      addTearDown(container.dispose);
+
+      await container
+          .read(productManagementControllerProvider)
+          .createGlobalProduct(
+            label: 'Saumon',
+            imageUrl: 'https://example.com/salmon.png',
+            productCategory: const ProductCategoryDto(id: 3, name: 'Seafood'),
+          );
+
+      expect(api.createdGlobalProducts.single.label, 'Saumon');
+      expect(api.createdGlobalProducts.single.productCategory?.id, 3);
+      expect(api.createdGlobalProducts.single.productCategory?.name, 'Seafood');
+    });
+
+    test('editing a global product sends selected category', () async {
+      final api = _FakeProductsApi();
+      final container = _containerWith(api);
+      addTearDown(container.dispose);
+
+      await container
+          .read(productManagementControllerProvider)
+          .updateGlobalProduct(
+            id: 9,
+            label: 'Saumon',
+            productCategory: const ProductCategoryDto(id: 4, name: 'Fish'),
+          );
+
+      expect(api.updatedGlobalProducts.single.id, 9);
+      expect(api.updatedGlobalProducts.single.productCategory?.id, 4);
+    });
+  });
+
+  group('category management', () {
+    test(
+      'creates and updates categories through the category endpoints',
+      () async {
+        final api = _FakeProductsApi();
+        final container = _containerWith(api);
+        addTearDown(container.dispose);
+
+        await container
+            .read(productManagementControllerProvider)
+            .createProductCategory(name: 'Seafood');
+        await container
+            .read(productManagementControllerProvider)
+            .updateProductCategory(id: 3, name: 'Fresh fish');
+
+        expect(api.createdCategoryNames, ['Seafood']);
+        expect(api.updatedCategories.single.id, 3);
+        expect(api.updatedCategories.single.name, 'Fresh fish');
+      },
+    );
   });
 
   group('delete behavior', () {
@@ -228,6 +331,10 @@ class _FakeProductsApi extends ProductsApi {
 
   final deletedFamilyProductIds = <int>[];
   final deletedGlobalProductIds = <int>[];
+  final createdGlobalProducts = <GlobalProductDto>[];
+  final updatedGlobalProducts = <GlobalProductDto>[];
+  final createdCategoryNames = <String>[];
+  final updatedCategories = <ProductCategoryDto>[];
 
   @override
   Future<void> deleteFamilyProduct(int id) async {
@@ -237,5 +344,56 @@ class _FakeProductsApi extends ProductsApi {
   @override
   Future<void> deleteGlobalProduct(int id) async {
     deletedGlobalProductIds.add(id);
+  }
+
+  @override
+  Future<GlobalProductDto> createGlobalProduct({
+    required String label,
+    String? imageUrl,
+    ProductCategoryDto? productCategory,
+  }) async {
+    final product = GlobalProductDto(
+      id: 100,
+      label: label,
+      imageUrl: imageUrl,
+      productCategory: productCategory,
+    );
+    createdGlobalProducts.add(product);
+    return product;
+  }
+
+  @override
+  Future<GlobalProductDto> updateGlobalProduct({
+    required int id,
+    required String label,
+    String? imageUrl,
+    ProductCategoryDto? productCategory,
+  }) async {
+    final product = GlobalProductDto(
+      id: id,
+      label: label,
+      imageUrl: imageUrl,
+      productCategory: productCategory,
+    );
+    updatedGlobalProducts.add(product);
+    return product;
+  }
+
+  @override
+  Future<ProductCategoryDto> createProductCategory({
+    required String name,
+  }) async {
+    createdCategoryNames.add(name);
+    return ProductCategoryDto(id: 200, name: name);
+  }
+
+  @override
+  Future<ProductCategoryDto> updateProductCategory({
+    required int id,
+    required String name,
+  }) async {
+    final category = ProductCategoryDto(id: id, name: name);
+    updatedCategories.add(category);
+    return category;
   }
 }
