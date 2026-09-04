@@ -608,7 +608,7 @@ class _ShoppingItemRow extends ConsumerWidget {
         ref
             .read(shoppingListItemsControllerProvider(listId).notifier)
             .isPurchasedTogglePending(itemId);
-    final subtitle = item.shoppingSubtitle;
+    final subtitle = item.shoppingPreview;
 
     return Material(
       color: purchased
@@ -620,9 +620,9 @@ class _ShoppingItemRow extends ConsumerWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: isPending ? null : () => onToggle(!purchased),
+        onTap: () => _showDetails(context),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
           child: Row(
             children: [
               Checkbox(
@@ -631,7 +631,9 @@ class _ShoppingItemRow extends ConsumerWidget {
                     ? null
                     : (value) => onToggle(value ?? !purchased),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
+              _ProductThumbnail(item: item, size: 44),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -653,7 +655,7 @@ class _ShoppingItemRow extends ConsumerWidget {
                       const SizedBox(height: 3),
                       Text(
                         subtitle,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
@@ -666,7 +668,7 @@ class _ShoppingItemRow extends ConsumerWidget {
               const SizedBox(width: 12),
               Text(
                 'x${item.quantity ?? 1}',
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: theme.textTheme.titleMedium?.copyWith(
                   color: purchased
                       ? theme.colorScheme.onSurfaceVariant
                       : theme.colorScheme.primary,
@@ -679,10 +681,131 @@ class _ShoppingItemRow extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _showDetails(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => _ProductDetailsSheet(item: item),
+    );
+  }
+}
+
+class _ProductThumbnail extends StatelessWidget {
+  const _ProductThumbnail({required this.item, required this.size});
+
+  final ListItemDto item;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final imageUrl = item.product?.imageUrl?.trim();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox.square(
+        dimension: size,
+        child: imageUrl == null || imageUrl.isEmpty
+            ? ColoredBox(
+                color: theme.colorScheme.surfaceContainerHighest,
+                child: Icon(
+                  Icons.inventory_2_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                  size: size * 0.5,
+                ),
+              )
+            : Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => ColoredBox(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    color: theme.colorScheme.onSurfaceVariant,
+                    size: size * 0.5,
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _ProductDetailsSheet extends StatelessWidget {
+  const _ProductDetailsSheet({required this.item});
+
+  final ListItemDto item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final details = item.shoppingDetails;
+    final badge = item.productSourceBadge;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          0,
+          20,
+          MediaQuery.viewInsetsOf(context).bottom + 24,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(child: _ProductThumbnail(item: item, size: 112)),
+            const SizedBox(height: 20),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    item.productName,
+                    style: theme.textTheme.headlineSmall,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  'x${item.quantity ?? 1}',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              details ?? 'No description available.',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (badge != null) ...[
+              const SizedBox(height: 16),
+              Chip(
+                label: Text(badge),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                side: BorderSide(color: theme.colorScheme.outlineVariant),
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                labelStyle: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 extension on ListItemDto {
-  String? get shoppingSubtitle {
+  String? get shoppingPreview {
     final descriptionText = description?.trim();
     final familyDescription = familyProduct?.description?.trim();
     final subtitle = descriptionText?.isNotEmpty == true
@@ -692,5 +815,29 @@ extension on ListItemDto {
       return null;
     }
     return subtitle;
+  }
+
+  String? get shoppingDetails {
+    final descriptionText = description?.trim();
+    final familyDescription = familyProduct?.description?.trim();
+    final details = [
+      if (descriptionText != null && descriptionText.isNotEmpty)
+        descriptionText,
+      if (familyDescription != null &&
+          familyDescription.isNotEmpty &&
+          familyDescription != descriptionText)
+        familyDescription,
+    ].join('\n\n');
+    return details.isEmpty ? null : details;
+  }
+
+  String? get productSourceBadge {
+    if (familyProduct != null) {
+      return 'Family';
+    }
+    if (product != null) {
+      return 'Global';
+    }
+    return null;
   }
 }
