@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/products/presentation/products_placeholder_screen.dart';
 import '../features/authentication/presentation/auth_controller.dart';
 import '../features/authentication/presentation/login_screen.dart';
 import '../features/families/presentation/families_screen.dart';
 import '../features/families/presentation/family_detail_screen.dart';
+import '../features/products/presentation/products_screen.dart';
 import '../features/shopping/presentation/shopping_screen.dart';
 import '../features/shopping_lists/data/shopping_list_models.dart';
 import '../features/shopping_lists/presentation/shopping_list_detail_screen.dart';
@@ -85,8 +85,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: ProductsPlaceholderScreen.routePath,
-                builder: (context, state) => const ProductsPlaceholderScreen(),
+                path: ProductsScreen.routePath,
+                builder: (context, state) => const ProductsScreen(),
               ),
             ],
           ),
