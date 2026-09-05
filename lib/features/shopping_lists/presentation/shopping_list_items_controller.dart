@@ -4,6 +4,7 @@ import '../../../core/network/api_error.dart';
 import '../data/product_search.dart';
 import '../data/shopping_list_models.dart';
 import '../data/shopping_lists_api.dart';
+import '../realtime/list_item_purchased_event.dart';
 
 final shoppingListItemsControllerProvider =
     AsyncNotifierProvider.family<
@@ -188,6 +189,26 @@ class ShoppingListItemsController extends AsyncNotifier<List<ListItemDto>> {
     }
   }
 
+  void applyPurchasedEvent(ListItemPurchasedEvent event) {
+    if (!event.appliesToList(_familyListId)) {
+      return;
+    }
+
+    final currentItems = state.value;
+    if (currentItems == null) {
+      return;
+    }
+
+    final updatedItems = applyPurchasedEventToItems(
+      items: currentItems,
+      currentListId: _familyListId,
+      event: event,
+    );
+    if (!identical(updatedItems, currentItems)) {
+      state = AsyncData(updatedItems);
+    }
+  }
+
   Future<List<ListItemDto>> _loadItems(int familyListId) async {
     try {
       return await ref.read(shoppingListsApiProvider).getItems(familyListId);
@@ -195,4 +216,32 @@ class ShoppingListItemsController extends AsyncNotifier<List<ListItemDto>> {
       throw ApiError.fromObject(error);
     }
   }
+}
+
+List<ListItemDto> applyPurchasedEventToItems({
+  required List<ListItemDto> items,
+  required int currentListId,
+  required ListItemPurchasedEvent event,
+}) {
+  if (!event.appliesToList(currentListId)) {
+    return items;
+  }
+
+  var found = false;
+  final updated = items.map((item) {
+    if (item.id != event.itemId) {
+      return item;
+    }
+
+    found = true;
+    return item.copyWith(
+      purchased: event.purchased,
+      purchasedAt: event.purchasedAt,
+      purchasedBy: event.purchasedBy,
+      clearPurchasedAt: !event.purchased,
+      clearPurchasedBy: !event.purchased,
+    );
+  }).toList();
+
+  return found ? updated : items;
 }

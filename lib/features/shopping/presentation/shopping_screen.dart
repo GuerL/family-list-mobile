@@ -13,6 +13,7 @@ import '../../shopping_lists/presentation/shopping_list_detail_screen.dart';
 import '../../shopping_lists/presentation/shopping_list_items_controller.dart';
 import '../../shopping_lists/presentation/shopping_lists_controller.dart';
 import '../../shopping_lists/presentation/shopping_lists_screen.dart';
+import '../../shopping_lists/realtime/shopping_list_realtime_client.dart';
 
 enum ShoppingItemFilter { remaining, all, purchased }
 
@@ -450,6 +451,14 @@ class _ShoppingBody extends ConsumerWidget {
         final itemsState = ref.watch(
           shoppingListItemsControllerProvider(listId),
         );
+        ref.listen(shoppingListPurchasedEventsProvider(listId), (_, next) {
+          next.whenData((event) {
+            ref
+                .read(shoppingListItemsControllerProvider(listId).notifier)
+                .applyPurchasedEvent(event);
+          });
+        });
+
         return AsyncValueView<List<ListItemDto>>(
           value: itemsState,
           onRetry: () => ref

@@ -9,6 +9,7 @@ import 'package:familylist/features/shopping_lists/data/shopping_list_models.dar
 import 'package:familylist/features/shopping_lists/data/shopping_lists_api.dart';
 import 'package:familylist/features/shopping_lists/presentation/shopping_list_items_controller.dart';
 import 'package:familylist/features/shopping_lists/presentation/shopping_lists_controller.dart';
+import 'package:familylist/features/shopping_lists/realtime/list_item_purchased_event.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -353,6 +354,127 @@ void main() {
 
     expect(api.deletedListIds, [42]);
     expect(container.read(selectedShoppingListProvider), isNull);
+  });
+
+  group('Shopping realtime purchased events', () {
+    test('parses backend purchased event JSON', () {
+      final event = ListItemPurchasedEvent.fromJson({
+        'type': listItemPurchasedUpdatedType,
+        'familyListId': 100,
+        'itemId': 1,
+        'purchased': true,
+        'purchasedAt': '2026-09-05T10:15:30',
+        'purchasedBy': {'id': 7, 'firstName': 'Buyer', 'lastName': 'User'},
+      });
+
+      expect(event.type, listItemPurchasedUpdatedType);
+      expect(event.familyListId, 100);
+      expect(event.itemId, 1);
+      expect(event.purchased, isTrue);
+      expect(event.purchasedAt, DateTime(2026, 9, 5, 10, 15, 30));
+      expect(event.purchasedBy?.displayName, 'Buyer User');
+    });
+
+    test('applies purchased=true event to existing item', () {
+      final updated = applyPurchasedEventToItems(
+        currentListId: 100,
+        items: const [ListItemDto(id: 1, description: 'Milk')],
+        event: const ListItemPurchasedEvent(
+          type: listItemPurchasedUpdatedType,
+          familyListId: 100,
+          itemId: 1,
+          purchased: true,
+          purchasedBy: PurchasedByDto(firstName: 'Buyer'),
+        ),
+      );
+
+      expect(updated.single.purchased, isTrue);
+      expect(updated.single.purchasedBy?.displayName, 'Buyer');
+    });
+
+    test('applies purchased=false event and clears purchaser data', () {
+      final updated = applyPurchasedEventToItems(
+        currentListId: 100,
+        items: [
+          ListItemDto(
+            id: 1,
+            description: 'Milk',
+            purchased: true,
+            purchasedAt: DateTime(2026, 9, 5),
+            purchasedBy: const PurchasedByDto(firstName: 'Buyer'),
+          ),
+        ],
+        event: const ListItemPurchasedEvent(
+          type: listItemPurchasedUpdatedType,
+          familyListId: 100,
+          itemId: 1,
+          purchased: false,
+        ),
+      );
+
+      expect(updated.single.purchased, isFalse);
+      expect(updated.single.purchasedAt, isNull);
+      expect(updated.single.purchasedBy, isNull);
+    });
+
+    test('handles duplicate purchased events idempotently', () {
+      const event = ListItemPurchasedEvent(
+        type: listItemPurchasedUpdatedType,
+        familyListId: 100,
+        itemId: 1,
+        purchased: true,
+        purchasedBy: PurchasedByDto(firstName: 'Buyer'),
+      );
+      final once = applyPurchasedEventToItems(
+        currentListId: 100,
+        items: const [ListItemDto(id: 1, description: 'Milk')],
+        event: event,
+      );
+      final twice = applyPurchasedEventToItems(
+        currentListId: 100,
+        items: once,
+        event: event,
+      );
+
+      expect(twice.single.purchased, isTrue);
+      expect(twice.single.purchasedBy?.displayName, 'Buyer');
+    });
+
+    test('ignores unrelated and malformed events safely', () {
+      final items = const [ListItemDto(id: 1, description: 'Milk')];
+      final unrelated = applyPurchasedEventToItems(
+        currentListId: 100,
+        items: items,
+        event: const ListItemPurchasedEvent(
+          type: listItemPurchasedUpdatedType,
+          familyListId: 200,
+          itemId: 1,
+          purchased: true,
+        ),
+      );
+
+      expect(identical(unrelated, items), isTrue);
+      expect(
+        () => ListItemPurchasedEvent.fromJson({
+          'type': listItemPurchasedUpdatedType,
+          'familyListId': 100,
+          'purchased': true,
+        }),
+        throwsFormatException,
+      );
+    });
+
+    test('builds selected-list subscription target and websocket URL', () {
+      expect(purchasedTopicForList(100), '/topic/family-lists/100/purchased');
+      expect(
+        websocketUrlForApiBaseUrl('https://familylist.guerl.dev'),
+        'wss://familylist.guerl.dev/ws',
+      );
+      expect(
+        websocketUrlForApiBaseUrl('http://localhost:8080/api'),
+        'ws://localhost:8080/ws',
+      );
+    });
   });
 }
 
