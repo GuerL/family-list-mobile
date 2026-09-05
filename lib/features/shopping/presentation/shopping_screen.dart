@@ -137,6 +137,21 @@ class _ShoppingScreenState extends ConsumerState<ShoppingScreen> {
     final selectedListId = selectedList?.id;
     final filter = ref.watch(shoppingItemFilterProvider);
 
+    if (selectedListId != null) {
+      ref.listen(shoppingListPurchasedEventsProvider(selectedListId), (
+        _,
+        next,
+      ) {
+        next.whenData((event) {
+          ref
+              .read(
+                shoppingListItemsControllerProvider(selectedListId).notifier,
+              )
+              .applyPurchasedEvent(event);
+        });
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Shopping')),
       body: familiesState.when(
@@ -451,13 +466,6 @@ class _ShoppingBody extends ConsumerWidget {
         final itemsState = ref.watch(
           shoppingListItemsControllerProvider(listId),
         );
-        ref.listen(shoppingListPurchasedEventsProvider(listId), (_, next) {
-          next.whenData((event) {
-            ref
-                .read(shoppingListItemsControllerProvider(listId).notifier)
-                .applyPurchasedEvent(event);
-          });
-        });
 
         return AsyncValueView<List<ListItemDto>>(
           value: itemsState,

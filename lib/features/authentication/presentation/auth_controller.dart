@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/debug/app_logger.dart';
+import '../../../core/push/push_notification_service.dart';
 import '../../../core/storage/token_storage.dart';
 import '../data/auth_api.dart';
 import '../data/auth_models.dart';
@@ -111,8 +112,10 @@ class AuthController extends AsyncNotifier<AuthSession?> {
   }
 
   Future<void> logout() async {
+    await ref.read(pushNotificationServiceProvider).unregisterForLogout();
     // The current backend has no logout/revocation endpoint, so logout is local
-    // for this slice: remove stored tokens and return to unauthenticated state.
+    // after best-effort device unregister: remove stored tokens and return to
+    // unauthenticated state.
     appLogger.debug('Auth: local logout, clearing tokens');
     await _clearSession();
   }
