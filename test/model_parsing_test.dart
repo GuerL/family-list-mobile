@@ -17,6 +17,22 @@ void main() {
     expect(user.roles.single, 'ROLE_USER');
   });
 
+  test('maps register request JSON', () {
+    const request = RegisterUserDto(
+      firstName: 'Test',
+      lastName: 'User',
+      email: 'test@example.com',
+      password: 'secret',
+    );
+
+    expect(request.toJson(), {
+      'email': 'test@example.com',
+      'password': 'secret',
+      'firstName': 'Test',
+      'lastName': 'User',
+    });
+  });
+
   test('parses current FamilyDto JSON', () {
     final family = FamilyDto.fromJson({
       'id': 1,

@@ -16,6 +16,26 @@ class LoginUserDto {
 }
 
 @JsonSerializable()
+class RegisterUserDto {
+  const RegisterUserDto({
+    required this.email,
+    required this.password,
+    required this.firstName,
+    required this.lastName,
+  });
+
+  final String email;
+  final String password;
+  final String firstName;
+  final String lastName;
+
+  factory RegisterUserDto.fromJson(Map<String, dynamic> json) =>
+      _$RegisterUserDtoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$RegisterUserDtoToJson(this);
+}
+
+@JsonSerializable()
 class LoginResponse {
   const LoginResponse({
     required this.accessToken,

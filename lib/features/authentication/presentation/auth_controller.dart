@@ -65,6 +65,48 @@ class AuthController extends AsyncNotifier<AuthSession?> {
     }
   }
 
+  Future<void> register({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String password,
+  }) async {
+    state = const AsyncLoading();
+
+    try {
+      appLogger.debug('Auth: registration started for $email');
+      final registerResponse = await ref
+          .read(authApiProvider)
+          .register(
+            RegisterUserDto(
+              firstName: firstName,
+              lastName: lastName,
+              email: email,
+              password: password,
+            ),
+          );
+      appLogger.debug('Auth: registration succeeded, storing tokens');
+      await ref
+          .read(tokenStorageProvider)
+          .write(
+            AuthTokens(
+              accessToken: registerResponse.accessToken,
+              refreshToken: registerResponse.refreshToken,
+            ),
+          );
+      appLogger.debug('Auth: fetching current user after registration');
+      final user = await ref.read(authApiProvider).getCurrentUser();
+      appLogger.debug('Auth: authenticated as ${user.email}');
+      state = AsyncData(AuthSession(user: user));
+    } catch (error, stackTrace) {
+      final apiError = _readableRegisterError(ApiError.fromObject(error));
+      appLogger.debug('Auth: registration failed: ${apiError.message}');
+      await ref.read(tokenStorageProvider).clear();
+      state = AsyncError(apiError, stackTrace);
+      throw apiError;
+    }
+  }
+
   Future<bool> refreshAccessToken() async {
     final activeRefresh = _refreshCompleter;
     if (activeRefresh != null) {
@@ -120,5 +162,21 @@ class AuthController extends AsyncNotifier<AuthSession?> {
   Future<void> _clearSession() async {
     await ref.read(tokenStorageProvider).clear();
     state = const AsyncData(null);
+  }
+
+  ApiError _readableRegisterError(ApiError error) {
+    final message = error.message.toLowerCase();
+    if (error.statusCode == 409 || message.contains('email')) {
+      return ApiError(
+        message: 'An account already exists with this email.',
+        statusCode: error.statusCode,
+        fieldErrors: {
+          ...error.fieldErrors,
+          'email': 'An account already exists with this email.',
+        },
+      );
+    }
+
+    return error;
   }
 }

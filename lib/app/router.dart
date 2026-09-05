@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/authentication/presentation/auth_controller.dart';
 import '../features/authentication/presentation/login_screen.dart';
+import '../features/authentication/presentation/register_screen.dart';
 import '../features/families/presentation/families_screen.dart';
 import '../features/families/presentation/family_detail_screen.dart';
 import '../features/products/presentation/products_screen.dart';
@@ -25,6 +26,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: LoginScreen.routePath,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: RegisterScreen.routePath,
+        builder: (context, state) => const RegisterScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -95,7 +100,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
-      final isLoginRoute = state.matchedLocation == LoginScreen.routePath;
+      final isAuthRoute =
+          state.matchedLocation == LoginScreen.routePath ||
+          state.matchedLocation == RegisterScreen.routePath;
 
       if (authState.isLoading) {
         return null;
@@ -103,11 +110,11 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       final session = authState.whenOrNull(data: (session) => session);
       final isAuthenticated = session != null;
-      if (!isAuthenticated && !isLoginRoute) {
+      if (!isAuthenticated && !isAuthRoute) {
         return LoginScreen.routePath;
       }
 
-      if (isAuthenticated && isLoginRoute) {
+      if (isAuthenticated && isAuthRoute) {
         return FamiliesScreen.routePath;
       }
 

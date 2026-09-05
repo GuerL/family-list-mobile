@@ -25,6 +25,14 @@ class AuthApi {
     return LoginResponse.fromJson(response.data ?? <String, dynamic>{});
   }
 
+  Future<LoginResponse> register(RegisterUserDto request) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/auth/register',
+      data: request.toJson(),
+    );
+    return LoginResponse.fromJson(response.data ?? <String, dynamic>{});
+  }
+
   Future<Map<String, dynamic>> refresh(String refreshToken) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/auth/refresh',

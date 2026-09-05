@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
 import 'auth_controller.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -97,6 +99,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text('Sign in'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: isLoading
+                          ? null
+                          : () => context.go(RegisterScreen.routePath),
+                      child: const Text('Create account'),
                     ),
                   ],
                 ),
